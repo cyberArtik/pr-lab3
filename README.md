@@ -4,8 +4,6 @@
 **Group:** FAF-231
 **Date:** November 2025
 
-## Abstract
-
 This report details the development and analysis of a networked, multi-player implementation of the classic Memory Scramble game. The core challenge addressed is the design of a **concurrent, turn-less gameplay model** where multiple players can attempt to flip cards simultaneously. The solution is built upon a robust, thread-safe `Board` Abstract Data Type (ADT) implemented in TypeScript, which manages state transitions, player control, and concurrency using asynchronous programming patterns. The project structure, containerization strategy with Docker, server-side command handling, and rigorous testing procedures are documented.
 
 ## Project Architecture and Directory Structure
@@ -155,19 +153,19 @@ First card: a player tries to turn over a first card by identifying a space on t
 ### 1-A: If there is no card there (the player identified an empty space, perhaps because the card was just removed by another player), the operation fails.
 If I try to click on a card that was removed after a match, i will get a error pop up and i won't be able to take control of that space.
 
-![](images_report/image-8.png)
+![](images_report/image-11.png)
 
 ### 1-B: If the card is face down, it turns face up (all players can now see it) and the player controls that card.
 I flipped a card and it can be seen both on my screen and the other player's screen.
 
-![](images_report/image-9.png)
+![](images_report/image-8.png)
 
 ### 1-C: If the card is already face up, but not controlled by another player, then it remains face up, and the player controls the card.
 No one had control over the rainbow card and it was face up, so I clicked on it and took control.
 
-![](images_report/image-10.png)
+![](images_report/image-9.png)
 
-![](images_report/image-11.png)
+![](images_report/image-10.png)
 
 ### 1-D: And if the card is face up and controlled by another player, the operation waits. The player will contend with other players to take control of the card at the next opportunity.
 If I click on a card controlled by someone else, it will turn green and I will wait till it is free.
@@ -198,7 +196,7 @@ If the card is face down, or if the card is face up but not controlled by a play
 
 ### 2-D: If the two cards are the same, that’s a successful match! The player keeps control of both cards (and they remain face up on the board for now).
 
-![](images_report/image-18.png)
+![](images_report/image-17.png)
 
 
 ### 2-E: If they are not the same, the player relinquishes control of both cards (again, they remain face up for now).
@@ -215,25 +213,19 @@ After trying to turn over a second card, successfully or not, the player will tr
 
 The removed cards are from matching pairs:
 
-![](images_report/image-21.png)
+![](images_report/image-18.png)
 
 ### 3-B: Otherwise, they had turned over one or two non-matching cards, and relinquished control but left them face up on the board. Now, for each of those card(s), if the card is still on the board, currently face up, and currently not controlled by another player, the card is turned face down.
 
  After losing relinquishing control of pair, they are turned down when I make next move.
 
-![](images_report/image-22.png)
+![](images_report/image-21.png)
 
 ![](images_report/image-22.png)
 
 
 ### Map
 I mapped the unicorns to lolipops succesfully:
-
-![](images_report/image-23.png)
-
-## Card Transformation Utility
-
-The `map` command provides a powerful utility for transforming the card pictures on the board. The server exposes this via the `/replace` endpoint, allowing for dynamic content changes. For example, the image below shows the successful transformation of all "unicorn" cards to "lollipop" cards.
 
 ![](images_report/image-23.png)
 
