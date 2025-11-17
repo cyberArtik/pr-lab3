@@ -1,470 +1,174 @@
-Laboratory Work #3 - Memory Scramble 
-Student: Ilico Artemie
-Group: FAF-231 
+# LAB 3 PR: Memory Scramble
+During this laboratory work I developed a networked multiplayer version of Memory Scramble, the game in which you turn over face-down cards and try to find matching pairs. My version has players turning over cards simultaneously, rather than taking turns.
 
-Executive Summary
-This laboratory assignment involved building a concurrent, web-based Memory card-matching game where multiple players can interact with the board simultaneously without taking turns. The implementation handles complex asynchronous operations, prevents deadlocks, and provides real-time updates to all connected players through HTTP endpoints.
+## Contents of Directory
+* I have multiple directories in the root. The *boards* directory contains game board configuration files (ab.txt, perfect.txt, zoom.txt) that define different card layouts. *src* contains the TypeScript source files including the core game logic (board.ts, player.ts, server.ts, commands.ts, simulation.ts). test contains unit tests (board.test.ts) for testing the game components. *public* contains  web assets served to clients. *doc* contains documentation resources organized into subdirectories using *TypeDoc*.
+* In this project, the *Dockerfile* defines how the game server environment is built, including TypeScript compilation, and all necessary dependencies to run the Memory Scramble server inside a container. The docker-compose.yml file orchestrates the container, mapping port 8080 for HTTP access and specifying which board file to use when starting the server.
 
-Table of Contents
+![](images_report/image.png)
 
-Project Architecture
-Core Implementation
-Containerization Strategy
-Quality Assurance
-Game Mechanics Verification
-Advanced Features
+## Dockerfile
+The *Dockerfile* sets up the environment, copies the package.json files and installs all npm dependencies, then copies the entire project source code into the container's /app directory. It compiles the TypeScript source files into JavaScript using npm run compile, exposes port 8080 for HTTP access, and starts the Memory Scramble server with the perfect.txt board configuration file.
 
-
-Project Architecture
-Directory Structure Analysis
-The project follows a modular TypeScript architecture with clear separation of concerns:
-lab3_pr/
-├── src/              # Core application logic
-│   ├── board.ts      # Game state management + concurrency control
-│   ├── player.ts     # Player state tracking ADT
-│   ├── commands.ts   # High-level game operations
-│   ├── server.ts     # HTTP REST API implementation
-│   └── simulation.ts # Automated testing scenarios
-├── test/             # Unit + integration tests
-│   └── board.test.ts # Comprehensive test suite
-├── boards/           # Game board configurations
-│   ├── perfect.txt   # 3×3 emoji board
-│   ├── ab.txt        # 5×5 alternating pattern
-│   └── zoom.txt      # 5×5 vehicle emojis
-├── public/           # Client-side web interface
-│   └── index.html    # Browser-based game UI
-├── doc/              # Auto-generated API documentation
-└── dist/             # Compiled JavaScript output
-Key Design Decision: Separating commands.ts from board.ts allows the server to call high-level operations without managing low-level board state directly.
-Show Image
-
-Core Implementation
-The Board ADT: Concurrency Model
-The Board class uses a sophisticated deferred promise pattern to handle multiple concurrent players:
-Data Structures:
-typescriptclass Board {
-    private readonly cards: (string | null)[][];           // Card pictures
-    private readonly faceUp: boolean[][];                  // Visibility state
-    private readonly controller: (string | null)[][];      // Ownership tracking
-    private readonly waitingForControl: Map<string, Deferred<void>[]>; // Blocked players
-    private readonly lingering: Map<string, Array<{row, col}>>;        // Deferred cleanup
-    private readonly changeResolvers: Map<string, Function[]>;         // Watch callbacks
-}
-Critical Insight: The waitingForControl map stores queues of promises for each card position, allowing multiple players to wait concurrently without polling.
-The Deferred Class: Custom Promise Management
-typescriptclass Deferred<T> {
-    public readonly promise: Promise<T>;
-    public resolve!: (value: T) => void;
-    public reject!: (reason?: unknown) => void;
-
-    public constructor() {
-        this.promise = new Promise<T>((resolve, reject) => {
-            this.resolve = resolve;
-            this.reject = reject;
-        });
-    }
-}
-This pattern enables external promise resolution, crucial for waking up waiting players when cards become available.
-Player State Management
-The Player ADT tracks individual player progress through the two-card flip sequence:
-typescriptexport class Player {
-    private flips: number;                                    // Statistics
-    private firstCard: { row: number; col: number } | null;   // Current play state
-    private secondCard: { row: number; col: number } | null;  // Current play state
-}
-Why two separate card fields? The game rules distinguish between first and second card flips with different behaviors (waiting vs. immediate failure).
-
-Containerization Strategy
-Docker Configuration
-My Docker setup ensures consistent deployment across different environments:
-Dockerfile:
-dockerfileFROM node:22.12
+```dockerfile
+FROM node:22.12
 WORKDIR /app
 COPY package*.json ./
 
-# Install dependencies first (layer caching optimization)
 RUN npm install
-
 COPY . .
-
-# Compile TypeScript to JavaScript
 RUN npm run compile
-
-# Expose HTTP port
 EXPOSE 8080
-
-# Start server with source map support for debugging
 CMD ["node", "--require", "source-map-support/register", "dist/src/server.js", "8080", "boards/perfect.txt"]
-Key Optimization: Copying package.json before source code allows Docker to cache the npm install layer, speeding up rebuilds.
-Docker Compose Orchestration
-yamlservices:
+```
+
+## Docker compose
+This *docker-compose.yml* file defines a single service called game-server that builds the containerized environment, maps port 8080 for HTTP access to the Memory Scramble game server, and runs the compiled TypeScript server with the perfect.txt board configuration file.
+
+```dockerfile
+services:
   game-server:
     build: .
     ports:
       - "8080:8080"
     command: ["node", "--require", "source-map-support/register", "dist/src/server.js", "8080", "boards/perfect.txt"]
-Deployment Commands:
-powershell# Local development (Windows PowerShell)
-npm start
+```
 
-# Docker deployment
+## Running the project
+We can run the project locally using the command:
+```
+npm start 8080 boards/perfect.txt
+```
+We can also run it using docker with the following command:
+```
 docker compose up
-Show Image
+```
 
-Quality Assurance
-Automated Testing Strategy
-The test suite covers all game rules (1-A through 3-B) plus edge cases:
-Running tests on Windows:
-powershellnpm run test
-Test Coverage:
+## Documentation
+I wrote documentation using JsDoc and it was generated as an html page using TypeDoc. I generated it using the command:
+```
+npm run doc
+```
+We can see the documentation in the following pictures. It contains, classes, functions, parameters and returns of functions. It also has an overview of what each function does.
 
-✅ Board parsing and validation
-✅ Rule 1 (First card): All paths (1-A, 1-B, 1-C, 1-D)
-✅ Rule 2 (Second card): All paths (2-A, 2-B, 2-C, 2-D, 2-E)
-✅ Rule 3 (Cleanup): Matched pair removal (3-A) and flip-down (3-B)
-✅ Concurrent waiting (Rule 1-D deadlock prevention)
-✅ Map function transformation
-✅ Watch functionality with multiple observers
+![](images_report/image-1.png)
 
-Show Image
-Total Test Count: 25 passing
-Code Documentation
-I generated API documentation using TypeDoc:
-powershellnpm run doc
-The documentation includes:
+![](images_report/image-2.png)
 
-Class hierarchies and inheritance
-Method signatures with parameter types
-Return value specifications
-JSDoc comments explaining functionality
+![](images_report/image-3.png)
 
-Show Image
-Show Image
-Show Image
+## Testing
+I wrote tests for all rules and parsing of the board as well. Tests can be run with the following command:
+```
+npm run test
+```
 
-Game Mechanics Verification
-Simulation: Automated Players
-I implemented two simulation modes to test concurrent gameplay:
-Mode 1: Polling with Watcher
-powershellnpm run simulation
-This mode runs 4 concurrent players making random moves while a dedicated watcher monitors all board changes:
-Show Image
-Show Image
-Observations:
+They all successfully run, as can be seen in the following picture:
 
-Players correctly wait when trying to flip controlled cards (Rule 1-D)
-Matched pairs are removed on next first card flip (Rule 3-A)
-Non-matching cards flip down at appropriate times (Rule 3-B)
-Watcher detects every board state change
+![](images_report/image-4.png)
 
-Mode 2: All Players Watch
-powershellnpm run simulation watch
-In this mode, all 4 players both play AND watch for changes:
-Show Image
-Key Insight: Every player successfully detects changes made by others, proving the changeResolvers mechanism works correctly for multiple simultaneous watchers.
+## Simulation
+I have both simple polling mode simulation with one watcher to state changes and a simulation with players that are only in watch mode.
+To run the basic polling simulation, we run:
+```
+npm run simulation
+```
 
-Game Mechanics Verification (Continued)
-Rule 1: First Card Flip Scenarios
-Rule 1-A: Empty Space → Failure
-Test: Attempting to flip a card after it was removed by a matching pair.
-Expected Behavior: Operation fails with "empty space" error.
-Result:
-Show Image
-Code Path:
-typescriptif (pic === null) {
-    throw new Error('empty space');  // Rule 1-A
-}
+![](images_report/image-5.png)
 
-Rule 1-B: Face-Down Card → Flip Up & Control
-Test: Clicking a face-down card as first card.
-Expected Behavior: Card flips face-up, player gains yellow control indicator.
-Result (My View):
-Show Image
-Result (Other Player's View):
-Show Image
-Observation: Both players see the card face-up, but only I see the yellow control indicator (correct behavior per spec).
+![](images_report/image-6.png)
 
-Rule 1-C: Face-Up Uncontrolled → Take Control
-Test Scenario:
+Every operation done by each player and every operation observed by board and watcher is logged to test if rules are applied correctly.
 
-Previous player had mismatch (Rule 2-E) → cards left face-up but uncontrolled
-I click one of those face-up cards as my first card
+To start the simulation with only watchers, we run:
 
-Expected Behavior: No visual change (already face-up), but I gain control (yellow).
-Before (face-up, no control):
-Show Image
-After (face-up, with control):
-Show Image
-Code Implementation:
-typescriptif (ctrl === null) {
-    controllerRow[col] = playerId;   // Take control without flipping
-    player.setFirstCard({ row, col });
-}
+```
+npm run simulation watch
+```
 
-Rule 1-D: Controlled by Another → Wait
-Test: Attempting to flip a card currently controlled by another player.
-Expected Behavior: My card turns green (waiting state), operation blocks until released.
-Visual Indicator:
-Show Image
-What's Happening Behind the Scenes:
-typescript// My code enters waiting state
-const deferred = new Deferred<void>();
-waitingForControl.get(key).push(deferred);
-await deferred.promise;  // ⏸️ BLOCKS HERE
+And we see actions from players as well as logs that prove that other players detected that move as well.
 
-// When other player releases the card:
-notifyWaiters(row, col);  // ▶️ Wakes me up
+![](images_report/image-7.png)
 
-Rule 2: Second Card Flip Scenarios
-Rule 2-A: Second Card is Empty → Fail & Relinquish First
-Test Scenario:
+## Play by rules
 
-I control first card (yellow)
-I try to flip an empty space as second card
+First card: a player tries to turn over a first card by identifying a space on the board…
 
-Expected Behavior:
+### 1-A: If there is no card there (the player identified an empty space, perhaps because the card was just removed by another player), the operation fails.
+If I try to click on a card that was removed after a match, i will get a error pop up and i won't be able to take control of that space.
 
-Error popup
-First card loses control (yellow → white) but stays face-up
-Will flip down on my next first card flip (Rule 3-B)
+![](images_report/image-11.png)
 
-Before (first card controlled):
-Show Image
-After (first card relinquished):
-Show Image
-Implementation Detail:
-typescriptif (pic === null) {
-    // Relinquish first card
-    firstCtrlRow[firstCard.col] = null;
-    this.notifyWaiters(firstCard.row, firstCard.col);  // Wake waiting players
-    this.rememberLingering(playerId, firstCard.row, firstCard.col);  // For 3-B
-    throw new Error('empty space');
-}
+### 1-B: If the card is face down, it turns face up (all players can now see it) and the player controls that card.
+I flipped a card and it can be seen both on my screen and the other player's screen.
 
-Rule 2-B: Second Card Controlled → Fail (Deadlock Avoidance)
-Test Scenario:
+![](images_report/image-8.png)
 
-Other player controls a card
-I control a different card as first
-I try to flip the other player's card as my second
+### 1-C: If the card is already face up, but not controlled by another player, then it remains face up, and the player controls the card.
+No one had control over the rainbow card and it was face up, so I clicked on it and took control.
 
-Expected Behavior:
+![](images_report/image-9.png)
 
-Immediate failure (no waiting to avoid deadlock)
-My first card relinquished
-Error message about controlled card
+![](images_report/image-10.png)
 
-First card controlled:
-Show Image
-After attempting second card:
-Show Image
-Show Image
-Why No Waiting? If both players waited for each other's cards, we'd have deadlock. The spec requires immediate failure here.
+### 1-D: And if the card is face up and controlled by another player, the operation waits. The player will contend with other players to take control of the card at the next opportunity.
+If I click on a card controlled by someone else, it will turn green and I will wait till it is free.
 
-Rule 2-C: Second Card Face-Down → Flip Up
-Test: Flipping a face-down card as second card.
-Expected Behavior: Card flips up, control assigned.
-Show Image
+![](images_report/image-12.png)
 
-Rule 2-D: Match → Keep Control
-Test: Flipping two identical cards in succession.
-Expected Behavior: Both cards stay face-up with yellow control until next first card flip (Rule 3-A).
-Show Image
-State After Match:
+Second card: once a player controls their first card, they can try to turn over a second card…
 
-Both cards: faceUp = true, controller = playerId
-Will be removed on next flipUp() call for this player
+### 2-A: If there is no card there, the operation fails. The player also relinquishes control of their first card (but it remains face up for now).
+I tried to take control of empty space as second card and I relinquished control of the first card.
+
+![](images_report/image-13.png)
+
+![](images_report/image-14.png)
+
+### 2-B: If the card is face up and controlled by a player (another player or themselves), the operation fails. To avoid deadlocks, the operation does not wait. The player also relinquishes control of their first card (but it remains face up for now).
+ When I try to choose as second card a already controlled card, I lose control of first card and I get an error.
+
+![](images_report/image-15.png)
+
+![](images_report/image-16.png)
+
+If the card is face down, or if the card is face up but not controlled by a player, then:
+
+### 2-C: If it is face down, it turns face up.
+
+![](images_report/image-17.png)
+
+### 2-D: If the two cards are the same, that’s a successful match! The player keeps control of both cards (and they remain face up on the board for now).
+
+![](images_report/image-17.png)
 
 
-Rule 2-E: No Match → Relinquish Both
-Test: Flipping two different cards.
-Expected Behavior:
+### 2-E: If they are not the same, the player relinquishes control of both cards (again, they remain face up for now).
 
-Both cards stay face-up but lose control
-Will flip down on next first card flip (Rule 3-B)
+I tried to flip a rainbow and then I flipped an unicorn. They are not a match, so I lost control over them.
 
-First card (rainbow):
-Show Image
-Second card (unicorn) - no match:
-Show Image
-Result:
-Both cards visible but no longer controlled (no yellow highlighting).
+![](images_report/image-19.png)
 
-Rule 3: Cleanup Before Next First Card
-Rule 3-A: Remove Matched Pairs
-Test Scenario:
+![](images_report/image-20.png)
 
-I match two cards (Rule 2-D)
-I flip a new first card
+After trying to turn over a second card, successfully or not, the player will try again to turn over a first card. When they do that, before following the rules above, they finish their previous play:
 
-Expected Behavior: Previous matched pair disappears from board.
-Before (matched pair still visible):
-Show Image
-After flipping next first card (matched pair removed):
-Show Image
-Code Execution:
-typescriptasync function cleanupPreviousPlay(player: Player): Promise<void> {
-    if (firstPic === secondPic && firstPic !== null) {
-        // 3-A: Remove matched cards
-        firstCardsRow[firstCard.col] = null;
-        secondCardsRow[secondCard.col] = null;
-        // ... also flip down and release control
-    }
-}
+### 3-A: If they had turned over a matching pair, they control both cards. Now, those cards are removed from the board, and they relinquish control of them. Score-keeping is not specified as part of the game.
 
-Rule 3-B: Flip Down Non-Matching Cards
-Test Scenario:
+The removed cards are from matching pairs:
 
-I have a mismatch (Rule 2-E) → cards face-up, uncontrolled
-I flip a new first card
+![](images_report/image-18.png)
 
-Expected Behavior: Previous non-matching cards flip face-down.
-Before (mismatched cards still face-up):
-Show Image
-After flipping next first card (mismatched cards flipped down):
-Show Image
-Conditional Flip-Down:
-typescriptprivate flipDownIfUncontrolled(row: number, col: number): void {
-    // Only flip down if: exists, face-up, AND uncontrolled
-    if (pic !== null && isFaceUp && ctrl === null) {
-        faceUpRow[col] = false;
-    }
-}
-This prevents flipping down cards that other players have taken control of in the meantime.
+### 3-B: Otherwise, they had turned over one or two non-matching cards, and relinquished control but left them face up on the board. Now, for each of those card(s), if the card is still on the board, currently face up, and currently not controlled by another player, the card is turned face down.
 
-Advanced Features
-Problem 4: Map Function - Card Transformation
-The map function allows batch transformation of all cards on the board while preserving game state.
-Implementation:
-typescriptpublic async map(f: (card: string) => Promise<string>): Promise<void> {
-    for (let r = 0; r < this.rows; r++) {
-        for (let c = 0; c < this.cols; c++) {
-            const pic = cardsRow[c];
-            if (pic !== null) {
-                cardsRow[c] = await f(pic);  // Transform
-            }
-        }
-    }
-    this.notifyChange();  // Alert all watchers
-}
-Test: Replace all unicorn emojis with lollipop emojis
-Before transformation:
-Show Image
-After transformation:
-Show Image
-Server Endpoint:
-typescriptapp.get('/replace/:playerId/:fromCard/:toCard', async(request, response) => {
-    const { fromCard, toCard } = request.params;
-    await map(board, playerId, async (card: string) => 
-        card === fromCard ? toCard : card
-    );
-});
-Key Feature: Face-up/face-down state and control ownership are preserved during transformation.
+ After losing relinquishing control of pair, they are turned down when I make next move.
 
-Problem 5: Watch for Changes
-The watch mechanism provides real-time board updates without polling.
-Implementation Strategy:
-typescript// Server endpoint
-app.get('/watch/:playerId', async(request, response) => {
-    const boardState = await watch(board, playerId);
-    response.status(200).type('text').send(boardState);
-});
+![](images_report/image-21.png)
 
-// commands.ts
-export async function watch(board: Board, playerId: string): Promise<string> {
-    const { promise, resolve } = Promise.withResolvers<string>();
-    board.addChangeWatcher(playerId, resolve);
-    return promise;  // Blocks until board changes
-}
-
-// board.ts - called after any mutation
-private notifyChange(): void {
-    for (const [playerId, resolvers] of this.changeResolvers.entries()) {
-        const state = this.render(playerId);
-        for (const resolve of resolvers) {
-            resolve(state);  // Wake up watcher
-        }
-    }
-    this.changeResolvers.clear();
-}
-Client-Side (Browser):
-javascriptfunction watch() {
-    const req = new XMLHttpRequest();
-    req.addEventListener('load', function onWatchLoad() {
-        refreshBoard(this.responseText);  // Update UI
-        setTimeout(watch, 1);  // Re-register immediately
-    });
-    req.open('GET', 'http://' + server + '/watch/' + playerID);
-    req.send();
-}
-Advantages over Polling:
-
-✅ Instant updates (no 2-second delay)
-✅ Lower server load (no repeated requests)
-✅ Scalable to many watchers (O(1) per change)
+![](images_report/image-22.png)
 
 
-Technical Challenges & Solutions
-Challenge 1: Deadlock Prevention (Rule 2-B)
-Problem: Two players each control one card and try to flip the other's card as their second.
-Solution: Rule 2-B explicitly forbids waiting for controlled cards as second cards. One player fails immediately, breaking the potential deadlock.
-Code:
-typescriptif (isFaceUp && ctrl !== null) {
-    // NO WAITING - fail immediately
-    throw new Error('card is controlled by another player');
-}
+### Map
+I mapped the unicorns to lolipops succesfully:
 
-Challenge 2: Deferred Cleanup (Rules 3-A/3-B)
-Problem: When do we remove matched pairs or flip down mismatched cards?
-Solution: The "lingering" mechanism remembers cleanup tasks and executes them before the next first card flip.
-Code:
-typescriptprivate readonly lingering: Map<string, Array<{row, col}>>;
-
-// When 2-A or 2-B fails:
-this.rememberLingering(playerId, firstCard.row, firstCard.col);
-
-// Before processing next first card:
-const linger = this.lingering.get(pid);
-if (linger) {
-    for (const {row, col} of linger) {
-        this.flipDownIfUncontrolled(row, col);
-    }
-}
-
-Challenge 3: Multiple Concurrent Watchers
-Problem: How to notify multiple players when the board changes?
-Solution: Store an array of resolver functions per player, call all of them on change.
-Code:
-typescriptprivate readonly changeResolvers: Map<string, ((value: string) => void)[]>;
-
-public addChangeWatcher(playerId: string, resolver: (value: string) => void): void {
-    let list = this.changeResolvers.get(playerId) ?? [];
-    list.push(resolver);
-    this.changeResolvers.set(playerId, list);
-}
-
-Performance Characteristics
-OperationTime ComplexitySpace ComplexityflipUp() (no waiting)O(1)O(1)flipUp() (with waiting)O(W) where W = waitersO(W)render()O(R × C)O(R × C)map()O(R × C)O(1)notifyChange()O(P) where P = watchersO(1)
-Board Dimensions: R = rows, C = columns
-Typical Board Size: 3×3 to 5×5 (9-25 cards)
-
-Lessons Learned
-
-Async/Await Simplifies Concurrency: Using promises instead of callbacks made the waiting logic much clearer.
-Deferred Cleanup is Elegant: Instead of immediately modifying state during second card flip, deferring cleanup to the next first card flip simplified the logic significantly.
-Testing Concurrent Code is Hard: The simulation mode was essential for catching race conditions that unit tests missed.
-Source Maps are Critical: Without source-map-support, debugging TypeScript errors would have been painful.
-Docker Ensures Consistency: What works on my Windows machine now works identically in the container.
-
-
-Conclusion
-This laboratory successfully implements all five problems:
-✅ Problem 1: Board ADT with full concurrency support
-✅ Problem 2: HTTP server with REST endpoints
-✅ Problem 3: Asynchronous operations with waiting (Rule 1-D)
-✅ Problem 4: Map function for card transformation
-✅ Problem 5: Watch mechanism for real-time updates
-The implementation handles all game rules (1-A through 3-B), prevents deadlocks, and provides a responsive browser-based UI. The code is thoroughly tested, well-documented, and containerized for easy deployment.
-Total Development Time: ~15 hours
-Final Line Count: ~1200 lines of TypeScript
-Test Coverage: 25 tests, all passing
+![](images_report/image-23.png)
